@@ -1,0 +1,79 @@
+{
+  "_comment": "Example redaction config — copy to redact-config.json and customize",
+
+  "token_style": "semantic",
+  "_token_style_note": "semantic=[TYPE:hint] | placeholder=[TYPE] | hash=sha256 prefix",
+
+  "patterns": [
+    {
+      "name": "email_client_domain",
+      "pattern": "[a-zA-Z0-9._%+\\-]+@your-client\\.com",
+      "replacement": "[EMAIL:client-{local}]",
+      "_note": "Preserves local part so alice vs bob is still distinguishable"
+    },
+    {
+      "name": "email_generic",
+      "pattern": "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}",
+      "replacement": "[EMAIL:redacted]"
+    },
+    {
+      "name": "ipv4_public",
+      "pattern": "\\b(?!10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.)(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b",
+      "replacement": "[IP:redacted]",
+      "_note": "Excludes RFC1918 private IPs (10.x, 172.16-31.x, 192.168.x)"
+    },
+    {
+      "name": "azure_subscription_id",
+      "pattern": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+      "replacement": "[AZURE-GUID:redacted]"
+    },
+    {
+      "name": "azure_storage_account",
+      "pattern": "clientstorage[a-z0-9]+",
+      "replacement": "[STORAGE:client-account]"
+    },
+    {
+      "name": "azure_rg_pattern",
+      "pattern": "RG-ClientName-[A-Za-z0-9\\-]+",
+      "replacement": "[RG:client-rg]"
+    },
+    {
+      "name": "azure_hostpool_pattern",
+      "pattern": "HP-ClientName-[A-Za-z0-9\\-]+",
+      "replacement": "[HOSTPOOL:client-hp]"
+    }
+  ],
+
+  "known_names": {
+    "_comment": "Client-specific proper nouns — extend per engagement",
+    "people": {
+      "Alice Johnson": "[PERSON:user-1]",
+      "Alice": "[PERSON:user-1]",
+      "Bob Smith": "[PERSON:user-2]",
+      "Bob": "[PERSON:user-2]",
+      "Charlie Brown": "[PERSON:user-3]",
+      "Charlie": "[PERSON:user-3]"
+    },
+    "org_names": {
+      "Acme Corporation": "[ORG:client]",
+      "acme-corp": "[ORG-SLUG:client]",
+      "AcmeCorp": "[ORG-SLUG:client]"
+    },
+    "devices": {
+      "HOST-PROD-01": "[VM:session-host]",
+      "ADMIN-WS-01": "[DEVICE:admin-ws]",
+      "LAPTOP-01": "[DEVICE:client-01]",
+      "LAPTOP-02": "[DEVICE:client-02]",
+      "DESKTOP-03": "[DEVICE:client-03]"
+    }
+  },
+
+  "keys_to_skip": [
+    "_comment", "version", "handoff_date", "session_id", "timestamp"
+  ],
+
+  "output": {
+    "suffix": "-REDACTED",
+    "subdir": "public"
+  }
+}

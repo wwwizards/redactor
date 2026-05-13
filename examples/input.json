@@ -1,0 +1,41 @@
+{
+  "_comment": "Example AI agent handoff file with PII",
+  "handoff_date": "2026-05-13",
+  "version": "0.7.8.9",
+  "session_id": "abc123",
+  
+  "completedWork": [
+    "Alice Johnson deployed session host HOST-PROD-01",
+    "Bob Smith configured Azure subscription 12345678-1234-1234-1234-123456789abc",
+    "Charlie Brown tested from device LAPTOP-01 (IP: 203.0.113.42)"
+  ],
+  
+  "keyDecisions": {
+    "avd_config": {
+      "resource_group": "RG-ClientName-AVD-PROD",
+      "host_pool": "HP-ClientName-PROD",
+      "storage_account": "clientstorageprod001",
+      "admin_email": "alice@your-client.com",
+      "internal_ip": "10.0.1.5"
+    }
+  },
+  
+  "criticalFiles": [
+    "C:\\Users\\alice\\Documents\\config.json",
+    "\\\\fileserver\\share\\deployment\\secrets.txt"
+  ],
+  
+  "marchingOrders": [
+    "Contact Bob Smith (bob@your-client.com) for Azure creds",
+    "Verify Charlie has access to LAPTOP-02",
+    "Deploy to avdadmin@your-client.com"
+  ],
+  
+  "postRebootMission": "Complete AVD deployment for Acme Corporation",
+  
+  "benchmarkTargets": {
+    "public_ip_assigned": "203.0.113.100",
+    "private_subnet": "10.0.2.0/24",
+    "deployment_region": "eastus"
+  }
+}
