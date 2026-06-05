@@ -1,12 +1,17 @@
-# redactor-rules.base.yaml — shipped baseline rule set for wwwizards/redactor
-#
-# This file layers on top of the built-in defaults already compiled into
-# redactor.py (email_generic, ipv4_public). Override any pattern by name in
-# redactor-rules.custom.yaml — last definition wins.
-#
-# YAML block scalars (|) let you write regex without double-escaping backslashes.
-# "pattern: |" means the value is a literal string — \b, \d, \( are read as-is.
-# Trailing newlines from block scalars are stripped automatically at load time.
+#------------------------------------------------------------------------------
+# FILE: redactor-rules.base.yaml
+#------------------------------------------------------------------------------
+#  PURPOSE: Shipped baseline rule set for wwwizards/redactor
+# ABSTRACT: Layers on top of BUILTIN_DEFAULTS (email_generic, ipv4_public
+#           compiled into redactor.py). Override any pattern by name in
+#           redactor-rules.custom.yaml — last definition wins.
+#           YAML block scalars (|) let you write regex without double-escaping
+#           backslashes. Trailing newlines are stripped at load time.
+#  CREATED: 2026-06-04 BY: Joe Negron <Joe@LogicWizards.NYC>
+#  COMPANY: LogicWizards.NYC <LogicWizards.NYC>
+#  VERSION: 0.4.0
+#  LICENSE: MIT
+#------------------------------------------------------------------------------
 
 token_style: semantic
 # Options:

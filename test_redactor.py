@@ -1,3 +1,20 @@
+#------------------------------------------------------------------------------
+# MODULE: test_redactor.py
+#------------------------------------------------------------------------------
+#  PURPOSE: pytest suite for redactor.py
+# ABSTRACT: Full TDD coverage for the redactor module. Validates core engine,
+#           file I/O paths, CLI flags, stdin->stdout pipe mode, layered config
+#           merge semantics, and YAML rule loading.
+# REQUIRES: Python 3.7+; pytest; pyyaml (optional, YAML tests skip if absent)
+#  CREATED: 2026-06-04 BY: Joe Negron <Joe@LogicWizards.NYC>
+#  COMPANY: LogicWizards.NYC <LogicWizards.NYC>
+#  VERSION: 0.4.0
+#  LICENSE: MIT
+#  USAGE:
+#     pytest test_redactor.py -v
+#     pytest test_redactor.py::TestPipeMode -v
+#     python path/to/pyst.py              # via pyst smart runner
+#------------------------------------------------------------------------------
 """
 test_redactor.py — pytest suite for redactor.py
 
@@ -6,6 +23,7 @@ Covers:
   - redact_file: JSON path, plain-text fallback, explicit --plain-text
   - CLI: --dry-run, --stats, --inplace, --plain-text, --ext *, keys_to_skip
   - Pipe mode: stdin → stdout, --input -, dry-run to stderr, --inplace guard
+  - Config layers: merge_configs, load_config_layer, YAML block scalars
   - Edge cases: nested JSON, list nodes, int/bool passthrough, email {local}
 """
 

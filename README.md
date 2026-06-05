@@ -34,24 +34,23 @@ Redacts personally identifiable information (PII) from JSON files or plain text 
 
 **Breaking changes:**
 - `redact-config.example.json` replaced by `redactor-rules.base.yaml`. The old
-  file is still loaded with a deprecation warning — rename it to silence.
+file is still loaded with a deprecation warning — rename it to silence.
 - `redact-config.json` (private copy) still loaded as a legacy fallback, but
-  `redactor-rules.custom.yaml` is the new override path.
+`redactor-rules.custom.yaml` is the new override path.
 - `--config` now **layers on top of** auto-discovered base+custom rules instead
-  of replacing them. Use `--config` to inject a domain-specific pack
-  (e.g. `--config redactor-rules.f5.yaml`) without losing the base patterns.
+of replacing them. Use `--config` to inject a domain-specific pack (e.g. `--config redactor-rules.f5.yaml`) without losing the base patterns.
 
 **New features:**
 - Layered config system: built-in defaults → base YAML → custom YAML → `--config`
 - YAML rule files with `pyyaml` (optional dep): use `pattern: |` block scalars
-  to write regex without double-escaping backslashes
+to write regex without double-escaping backslashes
 - `merge_configs()` public API: programmatic layer merging for library use
 - `BUILTIN_DEFAULTS` constant: email + public-IP redaction with zero files
 
 ### v0.3.0 — 2026-06-05
 - Pipe mode: `cat file | redactor.py --plain-text` (stdin → stdout, stats → stderr)
 - Config fallback: auto-uses `redactor-rules.base.yaml` when
-  `redact-config.json` is absent (fresh clone works OOB)
+`redact-config.json` is absent (fresh clone works OOB)
 - `--inplace` + stdin guard (exits non-zero)
 
 ### v0.2.0 — 2026-06-04
@@ -79,9 +78,7 @@ pip install -e .
 ```
 
 ### Standalone script
-Just copy `redactor.py` to your project. It works out-of-the-box with built-in
-defaults (email + public IP). To add rules, drop a `redactor-rules.custom.yaml`
-next to it.
+Just copy `redactor.py` to your project. It works out-of-the-box with built-in defaults (email + public IP). To add rules, drop a `redactor-rules.custom.yaml` next to it.
 
 ## Usage
 
@@ -124,8 +121,7 @@ python redactor.py --input secrets.json --output public/safe.json
 
 ### Pipe mode (stdin → stdout)
 
-Omit `--input` (or use `--input -`) when stdin is a pipe. Redacted output goes
-to stdout; stats/errors go to stderr so downstream pipe stages stay clean.
+Omit `--input` (or use `--input -`) when stdin is a pipe. Redacted output goes to stdout; stats/errors go to stderr so downstream pipe stages stay clean.
 
 ```bash
 # Basic pipe
@@ -169,8 +165,7 @@ HOST-PROD-01                                 →  [VM:session-host]
 4. --config <path>          explicit CLI override — always wins
 ```
 
-Copy `redactor-rules.base.yaml` and edit, or create `redactor-rules.custom.yaml`
-with only the patterns you want to change:
+Copy `redactor-rules.base.yaml` and edit, or create `redactor-rules.custom.yaml` with only the patterns you want to change:
 
 ```yaml
 # redactor-rules.custom.yaml
@@ -195,9 +190,7 @@ patterns:
 
 ### Legacy config (v0.2.0 and earlier)
 
-`redact-config.json` / `redact-config.example.json` are still loaded with a
-deprecation warning. Rename to `redactor-rules.base.yaml` (preferred) or
-`redactor-rules.custom.json` to silence the warning.
+`redact-config.json` / `redact-config.example.json` are still loaded with a deprecation warning. Rename to `redactor-rules.base.yaml` (preferred) or `redactor-rules.custom.json` to silence the warning.
 
 ```json
 {

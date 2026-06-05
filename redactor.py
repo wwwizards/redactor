@@ -1,23 +1,38 @@
-"""redactor.py - Config-driven PII redactor for JSON and plaintext operational files.
-Optional dep: pyyaml (pip install pyyaml) unlocks YAML rule files.
+#------------------------------------------------------------------------------
+# MODULE: redactor.py
+#------------------------------------------------------------------------------
+#  PURPOSE: Config-driven PII redactor for JSON and plaintext operational files
+# ABSTRACT: Zero-dep stdlib Python PII scrubber. Layered YAML/JSON config with
+#           built-in defaults, shipped baseline (redactor-rules.base.yaml), and
+#           gitignored org overrides. Supports file, directory, and stdin->stdout
+#           pipe mode. Optional pyyaml dep enables YAML rule files with block
+#           scalars (no double-escaping of regex backslashes).
+# REQUIRES: Python 3.7+; pyyaml (optional: pip install pyyaml)
+#  CREATED: 2026-06-04 BY: Joe Negron <Joe@LogicWizards.NYC>
+#  COMPANY: LogicWizards.NYC <LogicWizards.NYC>
+#  VERSION: 0.4.0
+#  LICENSE: MIT
+#  USAGE:
+#     python redactor.py --input logs/ --ext * --plain-text
+#     python redactor.py --input file.json --dry-run --stats
+#     cat capture.txt | python redactor.py --plain-text | grep ERROR | sort
+#     python redactor.py --input - --plain-text < file.txt
+#------------------------------------------------------------------------------
+"""redactor - Config-driven PII redactor for JSON and plaintext operational files.
 
-Usage:
-    python redactor.py --input .AI-TRAINING --output .AI-TRAINING/public
-    python redactor.py --input path/to/file.json --dry-run
-    python redactor.py --input .AI-TRAINING --stats
-    python redactor.py --input capture.txt --config redactor-rules.f5.yaml --plain-text --inplace
-    python redactor.py --input logs/ --ext * --plain-text --output logs/redacted/
+Layered config resolution (last layer wins per pattern name):
 
-    # Pipe mode (stdin -> stdout) -- omit --input or use --input -
-    cat file.txt | python redactor.py --plain-text
-    cat capture.txt | python redactor.py --plain-text | grep error | sort
-    python redactor.py --input - --plain-text < file.txt
+1. ``BUILTIN_DEFAULTS`` -- always active, zero files needed
+2. ``redactor-rules.base.yaml`` -- shipped baseline
+3. ``redactor-rules.custom.yaml`` -- gitignored org/user overrides
+4. ``--config <path>`` -- explicit CLI override, always wins
 
-Config resolution (last layer wins per-pattern-name):
-    1. Built-in defaults    -- always active, zero files needed
-    2. redactor-rules.base.yaml  -- shipped baseline (replaces redact-config.example.json)
-    3. redactor-rules.custom.yaml -- gitignored org/user overrides
-    4. --config <path>      -- explicit CLI override, always wins"""
+Public API::
+
+    from redactor import build_replacers, redact_value, redact_node, redact_file
+    from redactor import merge_configs, load_config_layer, discover_config_layers
+    from redactor import BUILTIN_DEFAULTS
+"""
 
 import re
 import json
