@@ -1,7 +1,6 @@
 # redactor
 
-**Config-driven PII redactor for JSON and plaintext operational files**
-Zero external dependencies. Pure Python stdlib (re, json, pathlib, argparse).
+**Config-driven PII redactor for JSON and plaintext operational files** Zero external dependencies. Pure Python stdlib (re, json, pathlib, argparse).
 
 ## What It Does
 
@@ -16,18 +15,54 @@ Redacts personally identifiable information (PII) from JSON files or plain text 
 
 ## Features
 
-- **Zero dependencies** — stdlib only, runs anywhere Python 3.7+ exists
-- **Config-driven** — add new client patterns without touching code
+- **Zero dependencies** — stdlib only (`re`, `json`, `pathlib`, `argparse`, `sys`); `pyyaml` optional for YAML rule files
+- **Config-driven** — layered YAML/JSON rules, last-definition-wins merge
+- **Built-in defaults** — email + public-IP redaction works out-of-the-box with zero config files
 - **Recursive** — handles nested JSON structures
 - **Preserves structure** — JSON formatting and hierarchy maintained
 - **Plain text mode** — `--plain-text` flag bypasses JSON parsing entirely (use for `.txt`, `.log`, tmsh captures, syslog)
+- **Pipe mode** — omit `--input` (or use `-`) to read from stdin; output to stdout; stats to stderr
 - **In-place editing** — `--inplace` overwrites source file(s) directly
 - **All-extension scan** — `--ext *` processes every file type in a directory
 - **Backreference replacements** — use `\1`, `\2` etc. in replacement strings (e.g. partial IP masking)
 - **Dry-run mode** — preview changes before writing
 - **Stats reporting** — see what was redacted and where
 
-## Installation
+## Changelog
+
+### v0.4.0 — 2026-06-05 (breaking)
+
+**Breaking changes:**
+- `redact-config.example.json` replaced by `redactor-rules.base.yaml`. The old
+  file is still loaded with a deprecation warning — rename it to silence.
+- `redact-config.json` (private copy) still loaded as a legacy fallback, but
+  `redactor-rules.custom.yaml` is the new override path.
+- `--config` now **layers on top of** auto-discovered base+custom rules instead
+  of replacing them. Use `--config` to inject a domain-specific pack
+  (e.g. `--config redactor-rules.f5.yaml`) without losing the base patterns.
+
+**New features:**
+- Layered config system: built-in defaults → base YAML → custom YAML → `--config`
+- YAML rule files with `pyyaml` (optional dep): use `pattern: |` block scalars
+  to write regex without double-escaping backslashes
+- `merge_configs()` public API: programmatic layer merging for library use
+- `BUILTIN_DEFAULTS` constant: email + public-IP redaction with zero files
+
+### v0.3.0 — 2026-06-05
+- Pipe mode: `cat file | redactor.py --plain-text` (stdin → stdout, stats → stderr)
+- Config fallback: auto-uses `redactor-rules.base.yaml` when
+  `redact-config.json` is absent (fresh clone works OOB)
+- `--inplace` + stdin guard (exits non-zero)
+
+### v0.2.0 — 2026-06-04
+- `--plain-text` flag (skip JSON parsing, raw regex on any file)
+- `--inplace` flag (overwrite input file, no suffix/subdir)
+- `--ext *` (process all file types in directory scans)
+- `ipv4_mask_first_two_octets` backreference pattern in example config
+- 36-test pytest suite (`test_redactor.py`)
+
+### v0.1.0 — 2026-06-04
+- Initial release: JSON redaction, recursive dir scan, config-driven patterns
 
 ### Quick start (no install)
 ```bash
@@ -44,7 +79,9 @@ pip install -e .
 ```
 
 ### Standalone script
-Just copy `redactor.py` and `redact-config.json` to your project.
+Just copy `redactor.py` to your project. It works out-of-the-box with built-in
+defaults (email + public IP). To add rules, drop a `redactor-rules.custom.yaml`
+next to it.
 
 ## Usage
 
@@ -85,9 +122,82 @@ python redactor.py --input capture.txt --plain-text --inplace
 python redactor.py --input secrets.json --output public/safe.json
 ```
 
+### Pipe mode (stdin → stdout)
+
+Omit `--input` (or use `--input -`) when stdin is a pipe. Redacted output goes
+to stdout; stats/errors go to stderr so downstream pipe stages stay clean.
+
+```bash
+# Basic pipe
+cat capture.txt | python redactor.py --plain-text
+
+# Chain with grep and sort (stats on stderr, invisible to downstream)
+cat app.log | python redactor.py --plain-text | grep ERROR | sort
+
+# Explicit stdin marker
+python redactor.py --input - --plain-text < capture.txt
+
+# Custom config in a pipe
+cat tmsh-output.txt | python redactor.py --plain-text --config redact-config-f5.json
+
+# Dry run via pipe — prints stats to stderr, nothing to stdout
+cat file.txt | python redactor.py --plain-text --dry-run
+```
+
+**Before / after example:**
+
+```
+BEFORE                                              AFTER
+─────────────────────────────────────────────────────────────────────
+203.0.113.47                                 →  [IP:redacted]
+alice@example.com                            →  [EMAIL:redacted]
+bob.smith@contoso.com                        →  [EMAIL:redacted]
+HOST-PROD-01                                 →  [VM:session-host]
+```
+
+> **Note:** `--inplace` cannot be combined with pipe mode (there is no file to
+> overwrite). The tool exits with a non-zero code if both are specified.
+
 ## Configuration
 
-Copy `redact-config.example.json` to `redact-config.json` and customize:
+### Rule resolution order (last layer wins per pattern name)
+
+```
+1. Built-in defaults        always active (email_generic, ipv4_public)
+2. redactor-rules.base.yaml shipped baseline — extend or override by name
+3. redactor-rules.custom.yaml  gitignored org/user overrides
+4. --config <path>          explicit CLI override — always wins
+```
+
+Copy `redactor-rules.base.yaml` and edit, or create `redactor-rules.custom.yaml`
+with only the patterns you want to change:
+
+```yaml
+# redactor-rules.custom.yaml
+patterns:
+  # Override the shipped client-domain pattern with your actual domain
+  - name: email_client_domain
+    pattern: |
+      [a-zA-Z0-9._%+\-]+@fordham\.edu
+    replacement: "[EMAIL:fordham-{local}]"
+
+  # Add a new pattern not in the base
+  - name: employee_id
+    pattern: "EMP-\\d{6}"
+    replacement: "[EMPID:redacted]"
+```
+
+> **YAML tip:** Use `pattern: |` (block scalar) to write regex without
+> double-escaping backslashes. `\b`, `\d`, `\(` are read literally.
+
+> **pyyaml:** YAML support requires `pip install pyyaml`. JSON rule files
+> (`.json`) always work without any extra deps.
+
+### Legacy config (v0.2.0 and earlier)
+
+`redact-config.json` / `redact-config.example.json` are still loaded with a
+deprecation warning. Rename to `redactor-rules.base.yaml` (preferred) or
+`redactor-rules.custom.json` to silence the warning.
 
 ```json
 {
@@ -155,8 +265,7 @@ Group 1 (`\1`) = first two octets (masked). Group 2 (`\2`) = last two octets (pr
 
 ### Partial IP masking (backreference)
 
-To mask only the first two octets while keeping the last two for subnet context,
-use a capture-group backreference in the replacement string:
+To mask only the first two octets while keeping the last two for subnet context, use a capture-group backreference in the replacement string:
 
 ```json
 {
@@ -168,8 +277,7 @@ use a capture-group backreference in the replacement string:
 
 `203.0.113.5` → `x.x.113.5` — subnet (last two octets) preserved for context.
 
-Backreferences (`\1`, `\2`, etc.) work in any `replacement` string — they are
-passed directly to Python's `re.sub()` so all standard group syntax applies.
+Backreferences (`\1`, `\2`, etc.) work in any `replacement` string — they are passed directly to Python's `re.sub()` so all standard group syntax applies.
 
 ### Keys to Skip
 

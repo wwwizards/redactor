@@ -1,12 +1,29 @@
 # Testing — redactor
 
+## Exccutive Summary 
+
+In automated software projects, SDLC testing and Test-Driven Development (TDD) are foundational to delivering high-quality, secure, and reliable code through pull requests (PRs). SDLC-aligned testing ensures validation occurs at every stage—from unit and integration to system and user acceptance—while TDD enforces a discipline of writing tests before code, leading to better design, higher coverage, and fewer defects. Together, they create a robust quality gate within CI/CD pipelines, enabling early detection of issues, minimizing regression risk, and improving reviewer confidence. This results in faster, safer PR merges, stronger code integrity, and a scalable DevSecOps lifecycle where automation continuously enforces standards without slowing delivery.
+
+![DevSecOps Testing Lifecycle](TESTING.md-Diagram-DevSecOpsTestLifecycle.png)
+
+
 ## Quick start
+
+### Recommended — [pyst](https://github.com/wwwizards/ipscan) (smart Python test runner)
+
+**[pyst](https://github.com/wwwizards/ipscan)** is the companion test runner to `psst`. It auto-discovers `test_*.py` files, supports tier-based filtering (`smoke`, `unit`, `integration`), and fans out across multiple Python versions. From this directory:
+
+```bash
+python path/to/pyst.py
+```
+
+### Fallback — plain pytest
 
 ```bash
 pytest test_redactor.py -v
 ```
 
-All 32 tests run in under 10 seconds. No external dependencies, no network calls.
+All tests run in under 10 seconds. No external dependencies, no network calls.
 
 ## Test matrix
 
@@ -51,3 +68,15 @@ pytest test_redactor.py::TestCLI -v
 - Directory scan with nested subdirectories (currently flat only)
 - `--stats` output format assertions (currently only checks count presence, not exact format)
 - Unicode / multi-byte content in plain-text mode
+- `test_redactor.py` uses flat naming (no tier suffix) — pyst classifies it as `[untiered]`. Future: rename to `test_redactor_unit.py` to enable tier-based filtering.
+
+---
+
+## Test run history
+
+| Date       | Runner                     | Python         | Result               | Duration | Notes                                              |
+|------------|----------------------------|----------------|----------------------|----------|----------------------------------------------------|
+| 2026-06-05 | pyst v0.1.4 + pytest 9.0.3 | 3.14.5 (win32) | 54 passed / 0 failed | 13.53s   | v0.4.0 — layered YAML config, merge_configs, 11 new tests |
+| 2026-06-05 | pyst v0.1.4 + pytest 9.0.3 | 3.14.5 (win32) | 43 passed / 0 failed | 0.78s    | v0.3.0 — pipe mode (stdin→stdout), config fallback |
+| 2026-06-05 | pyst v0.1.4 + pytest 9.0.3 | 3.14.5 (win32) | 36 passed / 0 failed | 0.86s    | v0.2.0 — all flags, backreference, CLI integration |
+| 2026-06-04 | pytest 9.0.3               | 3.14.5 (win32) | 36 passed / 0 failed | 5.98s    | v0.2.0 initial suite creation                      |

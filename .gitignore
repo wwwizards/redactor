@@ -64,7 +64,14 @@ Thumbs.db
 
 # Project-specific (CRITICAL)
 redact-config.json
-# ^ Client-specific PII — only commit redact-config.example.json
+redact-config.*.json
+# ^ Legacy private config names (v0.2.0 and earlier)
+redactor-rules.custom.yaml
+redactor-rules.custom.json
+redactor-rules.*.custom.yaml
+redactor-rules.*.custom.json
+# ^ Org/user override layers -- commit redactor-rules.base.yaml only
+*.PRIVATE
 
 # Test outputs
 examples/*-REDACTED.json

@@ -5,12 +5,15 @@ Covers:
   - Core engine (build_replacers, redact_value, redact_node)
   - redact_file: JSON path, plain-text fallback, explicit --plain-text
   - CLI: --dry-run, --stats, --inplace, --plain-text, --ext *, keys_to_skip
+  - Pipe mode: stdin → stdout, --input -, dry-run to stderr, --inplace guard
   - Edge cases: nested JSON, list nodes, int/bool passthrough, email {local}
 """
 
+import io
 import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -22,6 +25,10 @@ from redactor import (
     redact_node,
     redact_file,
     main,
+    merge_configs,
+    load_config_layer,
+    BUILTIN_DEFAULTS,
+    _YAML_AVAILABLE,
 )
 
 # ── Minimal fixture config ────────────────────────────────────────────────────
@@ -492,3 +499,193 @@ class TestJsonFallbackStats:
 
         assert isinstance(stats["matched_patterns"], list)
         assert stats["replacements"] >= 2
+
+
+# ── Stdin / stdout pipe mode ───────────────────────────────────────────────────
+
+
+class TestPipeMode:
+    """Pipe mode: omit --input (or use --input -) with stdin patched."""
+
+    def _run_pipe(self, args: list, stdin_text: str, capsys):
+        sys.argv = ["redactor.py"] + args
+        with patch("sys.stdin", io.StringIO(stdin_text)):
+            with patch("sys.stdin.isatty", return_value=False):
+                main()
+        return capsys.readouterr()
+
+    def test_stdin_redacts_ip_to_stdout(self, capsys, cfg_file):
+        captured = self._run_pipe(
+            ["--plain-text", "--config", cfg_file],
+            "Server 203.0.113.5 connected",
+            capsys,
+        )
+        assert "[IP:redacted]" in captured.out
+        assert "203.0.113.5" not in captured.out
+
+    def test_stdin_redacts_email_to_stdout(self, capsys, cfg_file):
+        captured = self._run_pipe(
+            ["--plain-text", "--config", cfg_file],
+            "User alice@example.com logged in",
+            capsys,
+        )
+        assert "[EMAIL:redacted]" in captured.out
+        assert "alice@example.com" not in captured.out
+
+    def test_stdin_explicit_dash_input(self, capsys, cfg_file):
+        """--input - should trigger pipe mode the same as omitting --input."""
+        captured = self._run_pipe(
+            ["--input", "-", "--plain-text", "--config", cfg_file],
+            "From 203.0.113.5",
+            capsys,
+        )
+        assert "[IP:redacted]" in captured.out
+
+    def test_stdin_dry_run_no_stdout_content(self, capsys, cfg_file):
+        captured = self._run_pipe(
+            ["--plain-text", "--dry-run", "--config", cfg_file],
+            "alice@example.com",
+            capsys,
+        )
+        # dry-run: nothing written to stdout, stats go to stderr
+        assert captured.out == ""
+        assert "replacements" in captured.err
+
+    def test_stdin_stats_go_to_stderr(self, capsys, cfg_file):
+        """Stats output must go to stderr so stdout stays pipe-clean."""
+        captured = self._run_pipe(
+            ["--plain-text", "--stats", "--config", cfg_file],
+            "alice@example.com",
+            capsys,
+        )
+        assert "[EMAIL:redacted]" in captured.out   # content → stdout
+        assert "replacements" in captured.err        # stats → stderr
+
+    def test_stdin_inplace_errors(self, capsys, cfg_file):
+        """--inplace + stdin must exit with an error, not silently proceed."""
+        sys.argv = ["redactor.py", "--plain-text", "--inplace", "--config", cfg_file]
+        with patch("sys.stdin", io.StringIO("some text")):
+            with patch("sys.stdin.isatty", return_value=False):
+                with pytest.raises(SystemExit) as exc_info:
+                    main()
+        assert exc_info.value.code != 0
+
+    def test_no_input_no_pipe_errors(self, capsys, cfg_file):
+        """Omitting --input when stdin is a tty (not a pipe) must exit with error."""
+        sys.argv = ["redactor.py", "--plain-text", "--config", cfg_file]
+        with patch("sys.stdin.isatty", return_value=True):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+        assert exc_info.value.code != 0
+
+
+# ── Layered config: merge_configs + load_config_layer ─────────────────────────
+
+
+class TestConfigLayer:
+    """merge_configs() and load_config_layer() with last-definition-wins semantics."""
+
+    def test_builtin_defaults_contain_email_and_ip(self):
+        names = {p["name"] for p in BUILTIN_DEFAULTS["patterns"]}
+        assert "email_generic" in names
+        assert "ipv4_public" in names
+
+    def test_merge_later_pattern_overrides_by_name(self):
+        base = {"patterns": [{"name": "email_generic", "replacement": "[OLD]",
+                               "pattern": "old@old\\.com"}]}
+        override = {"patterns": [{"name": "email_generic", "replacement": "[NEW]",
+                                   "pattern": "new@new\\.com"}]}
+        merged = merge_configs(base, override)
+        assert len([p for p in merged["patterns"] if p["name"] == "email_generic"]) == 1
+        match = next(p for p in merged["patterns"] if p["name"] == "email_generic")
+        assert match["replacement"] == "[NEW]"
+
+    def test_merge_new_pattern_name_appends(self):
+        base = {"patterns": [{"name": "email_generic", "replacement": "[E]",
+                               "pattern": "a@b\\.c"}]}
+        extra = {"patterns": [{"name": "ipv4_custom", "replacement": "[IP]",
+                                "pattern": "\\d+\\.\\d+"}]}
+        merged = merge_configs(base, extra)
+        names = [p["name"] for p in merged["patterns"]]
+        assert "email_generic" in names
+        assert "ipv4_custom" in names
+
+    def test_merge_known_names_deep_merged(self):
+        base = {"known_names": {"people": {"Alice": "[PERSON:1]"}}}
+        override = {"known_names": {"people": {"Bob": "[PERSON:2]"},
+                                     "devices": {"LAPTOP-01": "[DEVICE:1]"}}}
+        merged = merge_configs(base, override)
+        assert merged["known_names"]["people"]["Alice"] == "[PERSON:1]"
+        assert merged["known_names"]["people"]["Bob"] == "[PERSON:2]"
+        assert merged["known_names"]["devices"]["LAPTOP-01"] == "[DEVICE:1]"
+
+    def test_merge_keys_to_skip_union(self):
+        base = {"keys_to_skip": ["version", "timestamp"]}
+        extra = {"keys_to_skip": ["session_id", "version"]}  # version already present
+        merged = merge_configs(base, extra)
+        assert set(merged["keys_to_skip"]) == {"version", "timestamp", "session_id"}
+
+    def test_merge_token_style_last_wins(self):
+        base = {"token_style": "semantic"}
+        override = {"token_style": "placeholder"}
+        merged = merge_configs(base, override)
+        assert merged["token_style"] == "placeholder"
+
+    def test_merge_output_shallow_merged(self):
+        base = {"output": {"suffix": "-REDACTED", "subdir": "public"}}
+        override = {"output": {"suffix": "-SAFE"}}
+        merged = merge_configs(base, override)
+        assert merged["output"]["suffix"] == "-SAFE"
+        assert merged["output"]["subdir"] == "public"  # not overwritten
+
+    def test_merge_strips_underscore_keys(self):
+        layer = {"patterns": [{"name": "x", "pattern": "a", "replacement": "b",
+                                "_note": "internal"}]}
+        merged = merge_configs(layer)
+        p = merged["patterns"][0]
+        assert "_note" not in p
+        assert p["name"] == "x"
+
+    def test_load_json_layer(self, tmp_path):
+        cfg = {"patterns": [{"name": "t", "pattern": "x", "replacement": "[X]"}],
+               "_comment": "ignored"}
+        p = tmp_path / "rules.json"
+        p.write_text(json.dumps(cfg), encoding="utf-8")
+        loaded = load_config_layer(p)
+        assert "_comment" not in loaded
+        assert loaded["patterns"][0]["name"] == "t"
+
+    @pytest.mark.skipif(not _YAML_AVAILABLE, reason="pyyaml not installed")
+    def test_load_yaml_layer(self, tmp_path):
+        yaml_text = (
+            "patterns:\n"
+            "  - name: email_generic\n"
+            "    pattern: |\n"
+            "      [a-z]+@[a-z]+\\.[a-z]+\n"
+            "    replacement: '[EMAIL:redacted]'\n"
+        )
+        p = tmp_path / "rules.yaml"
+        p.write_text(yaml_text, encoding="utf-8")
+        loaded = load_config_layer(p)
+        pattern_str = loaded["patterns"][0]["pattern"]
+        # block scalar adds trailing newline; build_replacers strips it
+        assert "[a-z]+@[a-z]" in pattern_str
+
+    @pytest.mark.skipif(not _YAML_AVAILABLE, reason="pyyaml not installed")
+    def test_yaml_block_scalar_compiles_without_strip(self, tmp_path):
+        """Patterns loaded from YAML block scalars must compile after .strip()."""
+        yaml_text = (
+            "patterns:\n"
+            "  - name: ipv4_public\n"
+            "    pattern: |\n"
+            r"      \b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b"
+            "\n"
+            "    replacement: '[IP:redacted]'\n"
+        )
+        p = tmp_path / "rules.yaml"
+        p.write_text(yaml_text, encoding="utf-8")
+        loaded = load_config_layer(p)
+        replacers = build_replacers(loaded)
+        stats = {"replacements": 0, "matched_patterns": set()}
+        out = redact_value("Server 203.0.113.5 down", replacers, stats)
+        assert "[IP:redacted]" in out

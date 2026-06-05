@@ -1,0 +1,115 @@
+# redactor-rules.base.yaml — shipped baseline rule set for wwwizards/redactor
+#
+# This file layers on top of the built-in defaults already compiled into
+# redactor.py (email_generic, ipv4_public). Override any pattern by name in
+# redactor-rules.custom.yaml — last definition wins.
+#
+# YAML block scalars (|) let you write regex without double-escaping backslashes.
+# "pattern: |" means the value is a literal string — \b, \d, \( are read as-is.
+# Trailing newlines from block scalars are stripped automatically at load time.
+
+token_style: semantic
+# Options:
+#   semantic     — [TYPE:hint]  e.g. [EMAIL:redacted], [IP:redacted]
+#   placeholder  — [TYPE]       e.g. [EMAIL], [IP]
+#   hash         — sha256 prefix of original value
+
+# ── Redaction patterns ────────────────────────────────────────────────────────
+# Applied in order. 'name' is the merge key — later layers override by name.
+
+patterns:
+
+  # Email — client domain (preserves local part for user traceability)
+  # Override this in redactor-rules.custom.yaml with your actual domain.
+  - name: email_client_domain
+    pattern: |
+      [a-zA-Z0-9._%+\-]+@your-client\.com
+    replacement: "[EMAIL:client-{local}]"
+
+  # Email — generic catch-all. Must come AFTER domain-specific rules.
+  # Overrides the built-in default (same name = replace, not append).
+  - name: email_generic
+    pattern: |
+      [a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}
+    replacement: "[EMAIL:redacted]"
+
+  # IPv4 — public addresses only. RFC1918 ranges pass through untouched:
+  #   10.x, 172.16-31.x, 192.168.x
+  # Overrides the built-in default (same name = replace).
+  - name: ipv4_public
+    pattern: |
+      \b(?!10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b
+    replacement: "[IP:redacted]"
+
+  # IPv4 partial mask — keeps last two octets for subnet/host context.
+  # 203.0.113.5 -> A.B.113.5
+  # Use INSTEAD OF ipv4_public when troubleshooters need host context.
+  # To activate: uncomment and comment out ipv4_public above.
+  #
+  # - name: ipv4_mask_first_two_octets
+  #   pattern: |
+  #     \b(\d{1,3}\.\d{1,3})\.(\d{1,3}\.\d{1,3})\b
+  #   replacement: "A.B.\\2"
+
+  # Azure subscription / tenant UUID
+  - name: azure_subscription_id
+    pattern: |
+      [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+    replacement: "[AZURE-GUID:redacted]"
+
+  # Azure storage account names — adjust prefix for your org
+  - name: azure_storage_account
+    pattern: clientstorage[a-z0-9]+
+    replacement: "[STORAGE:client-account]"
+
+  # Azure resource group names — adjust naming convention for your org
+  - name: azure_rg_pattern
+    pattern: RG-ClientName-[A-Za-z0-9\-]+
+    replacement: "[RG:client-rg]"
+
+  # Azure host pool names
+  - name: azure_hostpool_pattern
+    pattern: HP-ClientName-[A-Za-z0-9\-]+
+    replacement: "[HOSTPOOL:client-hp]"
+
+# ── Known proper nouns ────────────────────────────────────────────────────────
+# Literal string replacement applied before regex patterns.
+# Longest match wins within each group.
+# Extend in redactor-rules.custom.yaml with client-specific names.
+
+known_names:
+  people:
+    "Alice Johnson": "[PERSON:user-1]"
+    "Alice": "[PERSON:user-1]"
+    "Bob Smith": "[PERSON:user-2]"
+    "Bob": "[PERSON:user-2]"
+    "Charlie Brown": "[PERSON:user-3]"
+    "Charlie": "[PERSON:user-3]"
+
+  org_names:
+    "Acme Corporation": "[ORG:client]"
+    "acme-corp": "[ORG-SLUG:client]"
+    "AcmeCorp": "[ORG-SLUG:client]"
+
+  devices:
+    "HOST-PROD-01": "[VM:session-host]"
+    "ADMIN-WS-01": "[DEVICE:admin-ws]"
+    "LAPTOP-01": "[DEVICE:client-01]"
+    "LAPTOP-02": "[DEVICE:client-02]"
+    "DESKTOP-03": "[DEVICE:client-03]"
+
+# ── Keys to skip (JSON mode only) ────────────────────────────────────────────
+# Values under these JSON keys are never redacted, even if they contain PII.
+
+keys_to_skip:
+  - _comment
+  - version
+  - handoff_date
+  - session_id
+  - timestamp
+
+# ── Output settings ───────────────────────────────────────────────────────────
+
+output:
+  suffix: "-REDACTED"
+  subdir: public
